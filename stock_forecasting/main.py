@@ -4,7 +4,7 @@ import sys
 sys.path.append('./')
 # custom
 from stock_dataset import StockDataset
-from ml.lstm import StockPriceLSTM
+from ml.lstm import IntradayTraderLSTM
 # pure python
 from os import listdir
 from os.path import join, isfile
@@ -30,7 +30,7 @@ validation_dir = join(csv_dir, 'validation')
 
 num_epochs = 500
 learning_rate = 1e-4
-input_dim = 12
+input_dim = 61
 hidden_dim = 50
 num_layers = 1
 output_dim = 60
@@ -52,7 +52,7 @@ if __name__ == '__main__':
     dataset = ConcatDataset(datasets)
     dataloader = DataLoader(dataset, shuffle=False, batch_size=batch_size)
 
-    model = StockPriceLSTM(input_size=input_dim, hidden_size=hidden_dim, output_size=output_dim, num_layers=num_layers)
+    model = IntradayTraderLSTM(input_size=input_dim, hidden_size=hidden_dim, output_size=output_dim, num_layers=num_layers)
     model = model.cuda()
     criterion = torch.nn.MSELoss(reduction='mean')
     criterion = criterion.cuda()
