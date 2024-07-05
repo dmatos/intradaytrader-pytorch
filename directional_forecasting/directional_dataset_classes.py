@@ -21,8 +21,9 @@ class DirectionalClassesDataset(Dataset):
         self.means = self.df.mean(numeric_only=True)
         self.stds = self.df.std(numeric_only=True)
         self.labels = self.generate_labels()
+        self.labels = torch.from_numpy(self.labels).type(torch.LongTensor).to(device=torch.device("cuda:0"))
         self.standardize()
-        self.arr = self.df.to_numpy()   # numpy because of proc fork() and memory issues in python
+        self.arr = torch.from_numpy(self.df.to_numpy()).type(torch.Tensor).to(device=torch.device("cuda:0"))
 
     def standardize(self):
         self.df = (self.df - self.means) / self.stds
@@ -58,7 +59,7 @@ class DirectionalClassesDataset(Dataset):
 
     def __getitem__(self, idx):
         # train array and test item
-        train = torch.from_numpy(self.arr[idx:idx+self.sample_size]).type(torch.Tensor)
-        test = torch.from_numpy(np.array(self.labels[idx])).type(torch.LongTensor)
-        return train.to("cuda:0"), test.to("cuda:0")
+        train = self.arr[idx:idx+self.sample_size]
+        test = self.labels[idx]
+        return train, test
 

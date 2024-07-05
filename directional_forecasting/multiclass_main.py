@@ -26,7 +26,7 @@ train_dir = join(csv_dir, 'train')
 validation_dir = join(csv_dir, 'validation')
 validation_file = 'B3_PETR3.csv'
 
-num_epochs = 5000
+num_epochs = 10000
 learning_rate = 1e-4
 input_dim = 61
 hidden_dim = 100
@@ -35,7 +35,7 @@ output_dim = 3
 close_at_steps_ahead = 12
 
 sample_size = 240
-batch_size = 32
+batch_size = 1024
 
 
 def load_dataset(dir_to_read, filename):
@@ -69,7 +69,7 @@ def load_datasets():
         datasets.append(dataset)
 
     dataset = ConcatDataset(datasets)
-    return DataLoader(dataset, shuffle=False, batch_size=batch_size, persistent_workers=False)
+    return DataLoader(dataset, shuffle=False, batch_size=batch_size, num_workers=0, pin_memory=False)
 
 
 def plot(validations, predictions, loss_history):
