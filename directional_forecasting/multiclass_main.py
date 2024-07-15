@@ -1,16 +1,17 @@
 # coding=utf-8
 
 import sys
+
 sys.path.append('./')
+
+from directional_forecasting.model_controller import save_model, get_last_model
 # custom
 from directional_dataset_classes import DirectionalClassesDataset
-from ml.lstm import IntradayTraderLSTM
+from logger import logger
 # pure python
 from os import listdir
 from os.path import join, isfile
 import time
-import datetime
-from datetime import date
 # other libs
 import torch
 from torch.utils.data import ConcatDataset, DataLoader
@@ -27,49 +28,32 @@ validation_dir = join(csv_dir, 'validation')
 validation_file = 'B3_PETR3.csv'
 
 num_epochs = 10000
-learning_rate = 1e-4
-input_dim = 61
-hidden_dim = 100
-num_layers = 5
-output_dim = 3
-close_at_steps_ahead = 12
-
-sample_size = 240
-batch_size = 1024
+batch_size = 64
 
 
-def load_dataset(dir_to_read, filename):
+def load_dataset(dir_to_read, filename, steps_ahead, sample_size):
     return DirectionalClassesDataset(
         join(dir_to_read, filename),
         n_rowsto_drop=60,
         sample_size=sample_size,
-        steps_ahead=close_at_steps_ahead,
+        steps_ahead=steps_ahead,
         target_percent=0.005
     )
 
 
-def get_model():
-    return IntradayTraderLSTM(
-        input_size=input_dim,
-        hidden_size=hidden_dim,
-        num_layers=num_layers,
-        dropout=0.2,
-        output_size=output_dim)
-
-
 # @profile
-def load_datasets():
+def load_datasets(steps_ahead, sample_size):
     # Load and preprocess the data
 
     csv_files = [f for f in listdir(train_dir) if isfile(join(train_dir, f))]
     datasets = []
     for idx, file in enumerate(csv_files):
-        print('reading dataset #', idx, 'in file: ', file)
-        dataset = load_dataset(train_dir, file)
+        logger.info('reading dataset #' + str(idx) + ' in file: ' + str(file))
+        dataset = load_dataset(train_dir, file, steps_ahead, sample_size)
         datasets.append(dataset)
 
     dataset = ConcatDataset(datasets)
-    return DataLoader(dataset, shuffle=False, batch_size=batch_size, num_workers=0, pin_memory=False)
+    return DataLoader(dataset, shuffle=True, batch_size=batch_size, num_workers=0, pin_memory=False)
 
 
 def plot(validations, predictions, loss_history):
@@ -99,10 +83,10 @@ def plot(validations, predictions, loss_history):
     plt.show()
 
 
-def validation_step(model, hist):
-    validation_dataset = load_dataset(validation_dir, validation_file)
+def validation_step(model, hist, steps_ahead, sample_size):
+    validation_dataset = load_dataset(validation_dir, validation_file, steps_ahead, sample_size)
     dataloader = DataLoader(validation_dataset, shuffle=False, batch_size=1)
-    print("Validation dataset shape ", validation_dataset.df.shape)
+    logger.info("Validation dataset shape " + str(validation_dataset.df.shape))
     output_predictions = []
     output_validations = []
     for batch, train in dataloader:
@@ -112,16 +96,6 @@ def validation_step(model, hist):
         batch.detach()
         train.detach()
     plot(output_validations, output_predictions, hist)
-
-
-def save_model(model):
-    file_prefix = '-multiclass-directional-model.pyt'
-    now = datetime.datetime.now()
-    hour = '-'+str(now.hour)
-    minute = '-'+str(now.minute)
-    model_filename = str(date.today())+hour+minute+file_prefix
-    model_path_to_save = 'data/model/'+model_filename
-    torch.save(model.state_dict(), model_path_to_save)
 
 
 # @profile
@@ -136,7 +110,7 @@ def run_epoch(model, criterion, optimiser, dataloader):
         loss.backward()
         optimiser.step()
         model.zero_grad()
-    torch.cuda.empty_cache()
+    # torch.cuda.empty_cache()
     return loss_accumulator/counter
 
 
@@ -144,18 +118,18 @@ def run_epoch(model, criterion, optimiser, dataloader):
 def train_step(model, criterion, optimiser, dataloader):
     hist = np.zeros(num_epochs)
     start_time = time.time()
-    print("Training model...")
+    logger.info("Training model...")
     try:
         for t in range(num_epochs):
             hist[t] += run_epoch(model, criterion, optimiser, dataloader)
             epoch_time = int(time.time() - start_time)
-            print("Epoch ", t, "Mean loss: ", hist[t], "elapsed time ", epoch_time)
+            logger.info("Epoch " + str(t) + " Mean loss: " + str(hist[t]) + " elapsed time " + str(epoch_time))
 
     except KeyboardInterrupt:
-        print("Training process manually interrupted")
+        logger.warn("Training process manually interrupted")
     finally:
         training_time = time.time() - start_time
-        print("Training time: {}".format(training_time))
+        logger.info("Training time: {}".format(training_time))
     save_model(model)
     model.eval()
     return model, hist
@@ -163,15 +137,15 @@ def train_step(model, criterion, optimiser, dataloader):
 
 # @profile
 def main():
-    dataloader = load_datasets()
-    model = get_model()
-    model = model.cuda(device="cuda")
-    weights = torch.Tensor([0.2, 1., 1.])
+    model, params, _ = get_last_model()
+    dataloader = load_datasets(params["steps_ahead"], params["sample_size"])
+    model = model.cuda(device=torch.device("cuda:0"))
+    weights = torch.Tensor([1., 2., 2.])
     criterion = torch.nn.CrossEntropyLoss(weight=weights)
-    criterion = criterion.cuda(device="cuda")
-    optimiser = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    criterion = criterion.cuda(device=torch.device("cuda:0"))
+    optimiser = torch.optim.Adam(model.parameters(), lr=params["learning_rate"])
     model, loss_hist = train_step(model, criterion, optimiser, dataloader)
-    validation_step(model, loss_hist)
+    validation_step(model, loss_hist, params["steps_ahead"], params["sample_size"])
 
 
 if __name__ == '__main__':

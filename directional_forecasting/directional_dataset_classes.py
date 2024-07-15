@@ -15,15 +15,15 @@ class DirectionalClassesDataset(Dataset):
         self.df.set_index('date', inplace=True)
         self.df.drop(columns=['timestampUTC'], inplace=True)
         self.df.drop([self.df.index[i] for i in range(n_rowsto_drop)], inplace=True, axis='index')
-        self.df.insert(0, target_index, self.df.pop(target_index))
         self.sample_size = sample_size
         self.target_percent = target_percent
         self.means = self.df.mean(numeric_only=True)
         self.stds = self.df.std(numeric_only=True)
-        self.labels = self.generate_labels()
-        self.labels = torch.from_numpy(self.labels).type(torch.LongTensor).to(device=torch.device("cuda:0"))
+        self.labels, self.indexes = self.generate_labels_and_indexes()
+        self.labels = torch.from_numpy(self.labels).type(torch.LongTensor).to(device=torch.device("cuda:0"), non_blocking=True)
         self.standardize()
-        self.arr = torch.from_numpy(self.df.to_numpy()).type(torch.Tensor).to(device=torch.device("cuda:0"))
+        self.arr = self.df.to_numpy()
+        self.len = len(self.indexes)
 
     def standardize(self):
         self.df = (self.df - self.means) / self.stds
@@ -34,32 +34,36 @@ class DirectionalClassesDataset(Dataset):
     def invert_standardize(self, df):
         return (df * self.stds[0]) + self.means[0]
 
-    def generate_labels(self):
+    def generate_labels_and_indexes(self):
         """
         It checks if there is any close from T+1 until T+N steps ahead that is X% different from the current close
-        :return: list of labels
+        :return: list of labels, list of indexes to start and finish sample
         """
         labels = []
-        for i in range(0, self.df.shape[0]-self.steps_ahead):
+        indexes = []
+        date_format = '%Y-%m-%d %H:%M:%S'
+        for i in range(self.sample_size, self.df.shape[0]-self.steps_ahead):
+            sample_end_day = pd.to_datetime(self.df.index[i], format=date_format).day
+            labels_end_day = pd.to_datetime(self.df.index[i+self.steps_ahead], format=date_format).day
+            if sample_end_day != labels_end_day:
+                continue
+            indexes.append([i-self.sample_size, i])
             value_to_append = 0
-            for j in range(1, self.steps_ahead):
-                value = self.df.iloc[i+j]['close']
-                if value >= self.df.iloc[i]['close'] * (1.0 + self.target_percent):
-                    # print("labels.append(1) at : ", i)
-                    value_to_append = 1
-                    break
-                elif value <= self.df.iloc[i]['close'] * (1.0 - self.target_percent):
-                    value_to_append = 2
-                    break
+            value = self.df.iloc[i+self.steps_ahead]['close']
+            if value >= self.df.iloc[i]['close'] * (1.0 + self.target_percent):
+                # print("labels.append(1) at : ", i)
+                value_to_append = 1
+            elif value <= self.df.iloc[i]['close'] * (1.0 - self.target_percent):
+                value_to_append = 2
             labels.append(value_to_append)
-        return np.array(labels)  # numpy because of proc fork() and memory issues in python
+        return np.array(labels), np.array(indexes)  # numpy because of proc fork() and memory issues in python
 
     def __len__(self):
-        return self.df.shape[0] - self.sample_size - self.steps_ahead
+        return self.len
 
     def __getitem__(self, idx):
-        # train array and test item
-        train = self.arr[idx:idx+self.sample_size]
+        train = self.arr[self.indexes[idx][0]:self.indexes[idx][1]]
+        train = torch.from_numpy(train).type(dtype=torch.Tensor).to(device=torch.device("cuda:0"), non_blocking=True)
         test = self.labels[idx]
         return train, test
 
