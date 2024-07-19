@@ -25,8 +25,8 @@ def download_data():
     json_req = {
         "stockExchange": "B3",
         "tickerCode": "PETR4",
-        "begin": "2024-01-01T00:00:00.000Z",
-        "end": "2024-06-30T23:59:00.000Z",
+        "begin": "2024-07-01T00:00:00.000Z",
+        "end": "2024-07-30T23:59:00.000Z",
         "timeframe": 5,
         "signal": 30,
         "signalDelay": 0,

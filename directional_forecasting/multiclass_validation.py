@@ -23,7 +23,7 @@ sns.set_style("darkgrid")
 
 csv_dir = 'data'
 validation_dir = join(csv_dir, 'validation')
-validation_file = 'B3_PETR3.csv'
+validation_file = 'B3_PETR3_5.csv'
 
 
 def plot(validations, predictions):
@@ -43,23 +43,26 @@ def plot(validations, predictions):
     plt.show()
 
 
-def report_confusion_matrix(validations, predictions):
+def report_confusion_matrix(validations, predictions, targets):
     confusion_matrix = metrics.confusion_matrix(validations, predictions)
     print(confusion_matrix)
 
-    target_names = ['0 no_trend', '1 up', '2 down']
+    target_names = [str(i) for i in targets]
     print(classification_report(validations, predictions, target_names=target_names))
 
-    cm_display = metrics.ConfusionMatrixDisplay(confusion_matrix=confusion_matrix, display_labels=[0, 1, 2])
+    cm_display = metrics.ConfusionMatrixDisplay(confusion_matrix=confusion_matrix, display_labels=target_names)
     cm_display.plot()
     plt.show()
 
 
 if __name__ == '__main__':
 
-    model, params = load_model_from_disk_2()
+    model, params, _ = load_model_from_disk_2()
 
-    validation_dataset = load_dataset(validation_dir, validation_file, steps_ahead=params['steps_ahead'], sample_size=params['sample_size'])
+    validation_dataset = load_dataset(validation_dir, validation_file,
+                                      steps_ahead=params['steps_ahead'],
+                                      sample_size=params['sample_size'],
+                                      targets=params['targets'])
     dataloader = DataLoader(validation_dataset, shuffle=False, batch_size=1)
 
     print("Validation dataset shape ", validation_dataset.df.shape)
@@ -72,5 +75,5 @@ if __name__ == '__main__':
             output_predictions.append(predictions.to("cpu").detach().numpy()[0])
             output_validations.append(validation.to("cpu").detach().numpy()[0])
 
-    report_confusion_matrix(output_validations, output_predictions)
+    report_confusion_matrix(output_validations, output_predictions, params['targets'])
     plot(output_validations, output_predictions)

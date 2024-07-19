@@ -8,7 +8,7 @@ from torch.utils.data import Dataset
 
 class DirectionalClassesDataset(Dataset):
 
-    def __init__(self, file_path, target_index='close', sample_size=32, n_rowsto_drop=0, steps_ahead=1, target_percent=0.01):
+    def __init__(self, file_path, sample_size=32, n_rowsto_drop=0, steps_ahead=1, targets=[-0.005, 0, 0.005]):
         self.steps_ahead = steps_ahead
         self.df = pd.read_csv(file_path)
         self.df['date'] = pd.to_datetime(self.df['timestampUTC'], unit='s', errors='coerce')
@@ -16,7 +16,7 @@ class DirectionalClassesDataset(Dataset):
         self.df.drop(columns=['timestampUTC'], inplace=True)
         self.df.drop([self.df.index[i] for i in range(n_rowsto_drop)], inplace=True, axis='index')
         self.sample_size = sample_size
-        self.target_percent = target_percent
+        self.targets = np.array(targets)
         self.means = self.df.mean(numeric_only=True)
         self.stds = self.df.std(numeric_only=True)
         self.labels, self.indexes = self.generate_labels_and_indexes()
@@ -48,15 +48,15 @@ class DirectionalClassesDataset(Dataset):
             if sample_end_day != labels_end_day:
                 continue
             indexes.append([i-self.sample_size, i])
-            value_to_append = 0
-            value = self.df.iloc[i+self.steps_ahead]['close']
-            if value >= self.df.iloc[i]['close'] * (1.0 + self.target_percent):
-                # print("labels.append(1) at : ", i)
-                value_to_append = 1
-            elif value <= self.df.iloc[i]['close'] * (1.0 - self.target_percent):
-                value_to_append = 2
-            labels.append(value_to_append)
+            future_value = self.df.iloc[i+self.steps_ahead]['close']
+            present_value = self.df.iloc[i]['close']
+            label = self.get_label(present_value, future_value)
+            labels.append(label)
         return np.array(labels), np.array(indexes)  # numpy because of proc fork() and memory issues in python
+
+    def get_label(self, present_value, future_value):
+        return np.argmax(self.targets + 1 * 100 > 100 + ((future_value - present_value) / present_value))
+
 
     def __len__(self):
         return self.len
