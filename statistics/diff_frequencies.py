@@ -12,7 +12,7 @@ import matplotlib.pyplot as plt
 
 from os.path import join
 
-from scripts.downloader import download
+from scripts.downloader import download_csv_lstm
 from logger import logger
 
 data_dir = 'data'
@@ -20,7 +20,7 @@ output_dir = join(data_dir, 'stats')
 input_dir = join(output_dir, 'input')
 input_file_path = 'resources/ibovespa_ticker_codes.csv'
 
-frequency_buckets = np.array([-0.01, -0.005, -0.0025, 0, 0.0025, 0.005, 0.01, 2.])
+frequency_buckets = np.array([-1, -0.01, -0.005, -0.0025, 0, 0.0025, 0.005, 0.01, 2.])
 
 timeframes = [15, 30, 45, 60, 90, 120]
 
@@ -48,7 +48,7 @@ json_req = {
 def download_csv_for_timeframes(timeframes):
     for t in timeframes:
         json_req['timeframe'] = t
-        download(json_req, input_file_path)
+        download_csv_lstm(json_req, input_file_path)
 
 
 def read_ticker_codes():

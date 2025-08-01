@@ -9,7 +9,7 @@ from ml.lstm import IntradayTraderLSTM
 
 
 def get_last_model_params():
-    last_model_filename = '2024-07-18-22-25-last.pyt'
+    last_model_filename = '2024-07-21-17-46-last.pyt'
     return {
         "learning_rate": 1e-4,
         "input_dim": 79,

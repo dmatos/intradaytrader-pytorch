@@ -1,10 +1,9 @@
 # coding=utf-8
 
-from os import listdir
-from os.path import isfile, join
-
 import numpy as np
 import pandas as pd
+from os import listdir
+from os.path import isfile, join
 
 csv_dir = 'data'
 result_dir = join('data', 'input')
